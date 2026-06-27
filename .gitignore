@@ -1,0 +1,13 @@
+# Secrets / local env
+.env
+*.env
+!.env.example
+
+# Go build & test artifacts
+/backend/server
+/backend/cmd/server/server
+*.test
+*.out
+
+# Editor / OS
+.DS_Store
