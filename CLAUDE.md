@@ -10,12 +10,17 @@ each other** across multiple rounds, streaming live into a multi-column UI; a
 moderator persona then synthesizes a final verdict. The product hook is the live
 parallel debate. The engineering core — and the **primary purpose of this
 project — is learning idiomatic Go**: a Go backend fans out N concurrent
-streaming Anthropic calls and multiplexes them over a single WebSocket.
+streaming LLM calls (z.ai / GLM) and multiplexes them over a single WebSocket.
 
 ## Status — read the brief first
 
-This repo is **greenfield**: at present it contains only `PROJECT_BRIEF.md` and
-this file. There is no code, no `go.mod`, no git history yet.
+**Backend Phases 0–3 are implemented** (`backend/`): foundations (ServeMux,
+`log/slog`, config, graceful shutdown, `/healthz`), the typed event protocol,
+the concurrent fan-out orchestrator (errgroup → fan-in channel → single
+WebSocket writer), and multi-round debate with a moderator verdict. The provider
+is **z.ai (GLM)**, not Anthropic (see Tech stack). Exercised by a fake streaming
+provider under `-race`. **Not yet built:** the `frontend/` (Phase 4, still
+greenfield) and deploy/hardening (Phase 5, incl. rate limiting/auth).
 
 `PROJECT_BRIEF.md` is the **source of truth** for scope, the Go learning
 objectives (§3), the phased build plan (§6, Phases 0–5), and the design
@@ -31,7 +36,7 @@ A two-part repo (per brief §6):
 council/
   backend/    Go service
               net/http ServeMux (Go 1.22+), log/slog, config, graceful shutdown
-              orchestrator (errgroup fan-out), provider interface (Anthropic),
+              orchestrator (errgroup fan-out), provider interface (z.ai / GLM),
               WS handler + single writer goroutine, (Phase 4) SQLite persistence
   frontend/   Vite + React + TypeScript + Tailwind + shadcn/ui
 ```
@@ -43,7 +48,7 @@ many small, cohesive files (≈200–400 lines) over few large ones.
 
 One WebSocket per session carries **typed JSON events** server→client. The
 orchestrator uses `golang.org/x/sync/errgroup` to run one goroutine per persona
-per round, each streaming tokens from Anthropic concurrently.
+per round, each streaming tokens from the LLM provider (z.ai / GLM) concurrently.
 
 **Hard invariant (the heart of the project): WebSocket writes are NOT
 concurrency-safe.** All persona goroutines push their tagged token deltas into a
@@ -62,7 +67,7 @@ lesson and is non-negotiable.
 **Round flow:** Round 1 = each persona answers · Round 2 = each persona rebuts
 after seeing the others' transcript · Final = moderator synthesizes a verdict.
 Distinct personas come from distinct **system prompts**, not distinct vendors —
-one provider (Anthropic) for the MVP. Pass transcripts between rounds
+one provider (z.ai / GLM) for the MVP. Pass transcripts between rounds
 **immutably** (build new copies; never mutate a prior round's transcript).
 
 **Cancellation:** root a `context` tree at the WebSocket connection so that a
@@ -76,7 +81,8 @@ client disconnect or stop cancels every persona goroutine for that session.
 - WebSockets: `coder/websocket` (modern, context-aware) — **not** the older
   gorilla library.
 - Concurrency: `golang.org/x/sync/errgroup` for bounded concurrent fan-out.
-- LLM: Anthropic streaming (consume provider SSE → token deltas).
+- LLM: z.ai (GLM) streaming over OpenAI-compatible SSE → token deltas (the
+  brief specifies Anthropic; swapped to z.ai for this build).
 - Persistence (Phase 4): SQLite via `modernc.org/sqlite` (pure Go, no cgo) for
   shareable transcript replays.
 
