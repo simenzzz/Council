@@ -35,3 +35,28 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
 }
+
+/* Verdict spotlight entrance — used by VerdictPanel via animate-[verdict-in_…].
+   The motion-safe: variant already guards it; this keyframe is the payload. */
+@keyframes verdict-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Accessibility quality floor: honour a user's reduced-motion preference by
+   neutralising animation/transition across the app (dim, pulse, spotlight). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
