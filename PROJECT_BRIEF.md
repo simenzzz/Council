@@ -96,7 +96,7 @@ teach a specific idiom. Target competencies:
    │      │               each streams from the LLM concurrently
    │      └─ fan-in channel ── token deltas tagged {persona, round}
    ├─ Provider interface ── Anthropic (streaming); personas = system prompts
-   └─ (Phase 4) SQLite ── persist transcripts for shareable replays
+   └─ (deferred)   SQLite ── persist transcripts for shareable replays
 ```
 
 **The core design constraint = the central Go lesson.** WebSocket writes are
@@ -122,7 +122,8 @@ after seeing the others' transcript · Final = moderator synthesizes a verdict.
 - Concurrency: `golang.org/x/sync/errgroup`.
 - LLM: Anthropic streaming. One provider for MVP — distinct personas come from
   distinct **system prompts**, not distinct vendors.
-- Persistence (Phase 4): SQLite via `modernc.org/sqlite` (pure Go, no cgo).
+- Persistence (deferred, Phase 6): SQLite via `modernc.org/sqlite` (pure Go,
+  no cgo).
 
 **Frontend:**
 - Vite + React + TypeScript + Tailwind + shadcn/ui (fast path to a polished UI).
@@ -159,12 +160,17 @@ Multi-round orchestration + moderator verdict; a small turn state machine.
 → *Go:* multi-stage orchestration, immutable transcript passing between rounds,
 `WaitGroup`/channel coordination.
 
-**Phase 4 — Product polish (the recruiter surface)** *(~4 days)*
-Persona avatars/colors, typing indicators, round progress, smooth token
-animation, verdict panel, topic presets, and **shareable replay** (persist
-transcript in SQLite, replay via a link). Responsive. Invest here — it's what
-recruiters see first.
-→ *Frontend (existing strength)* + a little Go persistence.
+**Phase 4 — Frontend (the recruiter surface)** *(~5 days)*
+The full debate UI — and the product's visual hook: a **3D panel of LLM
+"characters"** (React Three Fiber) over a readable 2D transcript. Persona
+identity/colors, typing indicators, round progress, smooth token animation,
+verdict panel, topic presets, responsive. Invest here — it's what recruiters
+see first. Split into independently testable sub-phases (F0–F5) in
+**`FRONTEND_ROADMAP.md`** — read it before starting frontend work.
+→ *Frontend (existing strength)* — React/TS/Tailwind + Three.js (R3F).
+
+> **Note:** shareable replay / SQLite persistence used to live here; it has been
+> deferred to **Phase 6** so Phase 4 is purely the frontend.
 
 **Phase 5 — Ship & harden** *(~2 days)*
 Per-session rate limiting, reconnect handling, Dockerfile, deploy, README +
@@ -172,10 +178,16 @@ short architecture note + demo GIF.
 → *Go:* deploying Go; **testing concurrent code deterministically with a fake
 streaming provider.**
 
+**Phase 6 — Persistence & shareable replay (DEFERRED)** *(~2 days)*
+Persist completed transcripts in **SQLite** (`modernc.org/sqlite`, pure Go, no
+cgo) and replay a debate from a shareable link. Carved out of the old Phase 4
+so the frontend phase stays focused; pick this up after the UI ships.
+→ *Go:* `database/sql`, embedded migrations, replay endpoint.
+
 **"Done & demoable" line:** Phases 0–2 already produce the wow (several agents
 streaming live in parallel). Phase 3 makes it a *debate* rather than parallel
 monologues. Phase 4 makes it recruiter-worthy. Phase 5 ships it.
-**Safe cuts if time runs short:** shareable replay (Phase 4) and a second
+**Safe cuts if time runs short:** shareable replay (Phase 6) and a second
 persona-tuning pass.
 
 ---

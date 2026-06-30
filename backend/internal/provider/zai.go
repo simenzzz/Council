@@ -45,7 +45,7 @@ var _ Provider = (*ZaiProvider)(nil)
 func NewZaiProvider(apiKey string, model string) *ZaiProvider {
 	return &ZaiProvider{
 		apiKey:     apiKey,
-		baseURL:    "https://api.z.ai/api/paas/v4/chat/completions",
+		baseURL:    "https://api.z.ai/api/coding/paas/v4/chat/completions",
 		model:      model,
 		httpClient: &http.Client{},
 	}

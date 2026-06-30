@@ -37,7 +37,7 @@ council/
   backend/    Go service
               net/http ServeMux (Go 1.22+), log/slog, config, graceful shutdown
               orchestrator (errgroup fan-out), provider interface (z.ai / GLM),
-              WS handler + single writer goroutine, (Phase 4) SQLite persistence
+              WS handler + single writer goroutine, (deferred) SQLite persistence
   frontend/   Vite + React + TypeScript + Tailwind + shadcn/ui
 ```
 
@@ -83,8 +83,8 @@ client disconnect or stop cancels every persona goroutine for that session.
 - Concurrency: `golang.org/x/sync/errgroup` for bounded concurrent fan-out.
 - LLM: z.ai (GLM) streaming over OpenAI-compatible SSE → token deltas (the
   brief specifies Anthropic; swapped to z.ai for this build).
-- Persistence (Phase 4): SQLite via `modernc.org/sqlite` (pure Go, no cgo) for
-  shareable transcript replays.
+- Persistence (deferred, Phase 6): SQLite via `modernc.org/sqlite` (pure Go, no
+  cgo) for shareable transcript replays.
 
 **Frontend:** Vite + React + TypeScript + Tailwind + shadcn/ui.
 

@@ -22,7 +22,7 @@ func Load() (Config, error) {
 		Addr:           orDefault(os.Getenv("BACKEND_ADDR"), ":8080"),
 		AllowedOrigins: parseOrigins(os.Getenv("FRONTEND_ORIGINS")),
 		ZaiAPIKey:      zKey,
-		LlmModel:       orDefault(os.Getenv("LLM_MODEL"), "glm-4.6"),
+		LlmModel:       orDefault(os.Getenv("LLM_MODEL"), "glm-4.7"),
 	}, nil
 }
 

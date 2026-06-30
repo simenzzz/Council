@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/simenzzz/council/backend/internal/config"
 	"github.com/simenzzz/council/backend/internal/orchestrator"
 	"github.com/simenzzz/council/backend/internal/protocol"
@@ -20,6 +21,15 @@ const maxConcurrency = 6
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	// Best-effort: load .env into the process environment before config.Load
+	// reads it via os.Getenv. A missing .env is normal in production (real env
+	// is exported there), so this is not fatal. godotenv does NOT override
+	// variables already set in the environment — the real shell env wins.
+	if err := godotenv.Load(); err != nil {
+		logger.Debug("no .env file loaded; using process environment", "err", err)
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		logger.Error("config load failed", "err", err)

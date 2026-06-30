@@ -9,5 +9,8 @@
 *.test
 *.out
 
+# Local Claude settings (keep shared commands tracked)
+.claude/settings.local.json
+
 # Editor / OS
 .DS_Store

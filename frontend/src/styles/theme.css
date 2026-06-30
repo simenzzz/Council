@@ -1,0 +1,37 @@
+/* Council theme — "Holographic council".
+ *
+ * Tailwind v4 single-import + @theme token mapping. The hex/font values here
+ * MUST stay in sync with src/design/tokens.ts (the source of truth for JS
+ * consumers; CSS can't import the .ts module, so these mirror it). */
+
+@import "tailwindcss";
+
+@theme {
+  /* Chamber palette */
+  --color-bg: #0b1020;
+  --color-panel: #141a2e;
+  --color-panel-border: #243049;
+  --color-ink: #e6ecff;
+  --color-muted: #8a93b2;
+  --color-danger: #ff6b7a;
+
+  /* Per-persona neon accents (contract reused by F1 registry + F2 robots) */
+  --color-skeptic: #36d6ff;
+  --color-optimist: #ffc24b;
+  --color-expert: #34e0a1;
+  --color-contrarian: #c77dff;
+  --color-moderator: #9fb4ff;
+
+  /* Type roles */
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
