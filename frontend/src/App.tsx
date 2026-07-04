@@ -1,65 +1,66 @@
-// App — composes the F1 debate UI over the headless core. It owns only view-level
-// glue: the last-requested round count (for progress, which the reducer doesn't
-// track) and whether the verdict spotlight is open. All debate state lives in the
-// reducer behind useDebate(); the 3D stage (F2) will mount above the grid, reading
-// the same state.
+// App — the single owner of debate state and the layout switch. It holds only
+// view-level glue the reducer doesn't: the last-requested round count and the
+// asked question (both needed for on-screen readouts), plus the state-driven sound
+// cues. Below the md breakpoint it renders the 2D MobileLayout (no 3D bundle);
+// at md+ it renders the stage-first StageLayout, where the debate plays out in
+// bubbles above the robots inside a full-screen 3D council.
 
-import { useRef, useState } from "react";
-import { Header } from "./components/Header";
-import { QuestionForm } from "./components/controls/QuestionForm";
-import { ConnectionStatus } from "./components/status/ConnectionStatus";
-import { ErrorBanner } from "./components/status/ErrorBanner";
-import { TranscriptGrid } from "./components/transcript/TranscriptGrid";
-import { VerdictPanel } from "./components/verdict/VerdictPanel";
+import { useEffect, useRef, useState } from "react";
+import { MobileLayout } from "./components/MobileLayout";
+import { StageLayout } from "./components/StageLayout";
+import { useMediaQuery } from "./hooks/useMediaQuery";
+import { useSound } from "./hooks/useSound";
 import { DEFAULT_ROUNDS } from "./lib/protocol";
 import { useDebate } from "./state/useDebate";
-import { useVerdictSpotlight } from "./state/useVerdictSpotlight";
+
+const STAGE_MIN_WIDTH = "(min-width: 768px)";
 
 export default function App() {
   const { state, ask, stop } = useDebate();
   const [rounds, setRounds] = useState<number>(DEFAULT_ROUNDS);
-  const { open: verdictOpen, dismiss: dismissVerdict } = useVerdictSpotlight(state.phase);
+  const [question, setQuestion] = useState<string>("");
   const questionRef = useRef<HTMLTextAreaElement>(null);
+  const { enabled: soundEnabled, toggle: toggleSound, engine: sound } = useSound();
+  const stageFirst = useMediaQuery(STAGE_MIN_WIDTH);
 
-  const handleAsk = (question: string, r: number) => {
+  // Cue off state transitions, not raw tokens: a soft tick each time the round
+  // boundary advances (but not on the very first token, which only marks round
+  // 1 starting rather than a round completing), a chime the moment the verdict
+  // lands. Both are no-ops while muted (the sound engine gates internally).
+  const previousRound = useRef(state.currentRound);
+  const previousPhase = useRef(state.phase);
+  useEffect(() => {
+    if (previousRound.current > 0 && state.currentRound > previousRound.current) {
+      sound.playRoundCue();
+    }
+    previousRound.current = state.currentRound;
+  }, [state.currentRound, sound]);
+  useEffect(() => {
+    if (state.phase === "done" && previousPhase.current !== "done") sound.playVerdictChime();
+    previousPhase.current = state.phase;
+  }, [state.phase, sound]);
+
+  // The reducer tracks neither the requested round total nor the question text, so
+  // capture both here for the status/docket readouts before handing off to ask().
+  const handleAsk = (q: string, r: number) => {
     setRounds(r);
-    dismissVerdict();
-    ask(question, r);
+    setQuestion(q);
+    ask(q, r);
   };
 
-  // Return focus to the question input after the dialog unmounts (it restores
-  // focus to its opener first, so defer past that with rAF).
-  const handleAskAnother = () => {
-    dismissVerdict();
-    requestAnimationFrame(() => questionRef.current?.focus());
+  const shared = {
+    state,
+    rounds,
+    onAsk: handleAsk,
+    onStop: stop,
+    soundEnabled,
+    onToggleSound: toggleSound,
+    questionRef,
   };
 
-  const moderatorText = Object.values(state.transcript.moderator ?? {}).join("");
-  const showVerdict =
-    verdictOpen && (state.phase === "moderating" || state.phase === "done");
-
-  return (
-    <main className="mx-auto flex min-h-screen max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
-      <Header />
-
-      <QuestionForm phase={state.phase} onAsk={handleAsk} onStop={stop} textareaRef={questionRef} />
-
-      <ConnectionStatus phase={state.phase} currentRound={state.currentRound} rounds={rounds} />
-      <ErrorBanner state={state} />
-
-      {/* F2: the <DebateStage> R3F canvas mounts here, above the transcript. */}
-
-      <TranscriptGrid state={state} dimmed={showVerdict} />
-
-      {showVerdict && (
-        <VerdictPanel
-          phase={state.phase === "done" ? "done" : "moderating"}
-          verdict={state.verdict}
-          streamingText={moderatorText}
-          onClose={dismissVerdict}
-          onAskAnother={handleAskAnother}
-        />
-      )}
-    </main>
+  return stageFirst ? (
+    <StageLayout {...shared} question={question} />
+  ) : (
+    <MobileLayout {...shared} />
   );
 }

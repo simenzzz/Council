@@ -37,6 +37,11 @@ describe("parseEvent — valid frames", () => {
     expect(r.ok).toBe(true);
     if (r.ok && r.event.type === "verdict") expect(r.event.verdict).toBe("");
   });
+
+  it("accepts the moderator's round on an 8-round debate (MAX_ROUNDS + 1)", () => {
+    const r = parseEvent(frame({ type: "token", persona: "moderator", round: 9, delta: "x" }));
+    expect(r.ok).toBe(true);
+  });
 });
 
 describe("parseEvent — rejects malformed frames", () => {
@@ -48,6 +53,7 @@ describe("parseEvent — rejects malformed frames", () => {
     ["missing round on token", { type: "token", persona: "skeptic", delta: "x" }],
     ["zero round (1-indexed)", { type: "persona_done", persona: "skeptic", round: 0 }],
     ["missing round on round_complete", { type: "round_complete" }],
+    ["round past MAX_ROUNDS + 1", { type: "token", persona: "skeptic", round: 10, delta: "x" }],
   ];
 
   it("rejects non-JSON text", () => {

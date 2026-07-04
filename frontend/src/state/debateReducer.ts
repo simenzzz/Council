@@ -116,6 +116,9 @@ function reduceStatus(state: DebateState, status: WsStatus): DebateState {
       return {
         ...state,
         phase: "error",
+        // The debate is over: no one is streaming anymore, so clear the roster
+        // (otherwise mid-stream speakers stay falsely "active" in every view).
+        activeSpeakers: [],
         errors: withError(state.errors, { message: "connection closed before a verdict" }),
       };
     default:
@@ -152,15 +155,19 @@ function reduceEvent(state: DebateState, event: DebateEvent): DebateState {
       // A persona that errored is no longer streaming. A session-level error
       // (no persona) or a moderator failure (the sole source of the verdict) is
       // terminal; any other per-persona failure is recorded and the debate
-      // continues.
-      const activeSpeakers = event.persona
-        ? withoutActive(state.activeSpeakers, event.persona)
-        : state.activeSpeakers;
+      // continues. On a terminal error nobody is streaming, so clear the whole
+      // roster; a non-terminal per-persona error clears only that speaker.
+      // Inline the terminal test in the ternary so TS narrows event.persona to a
+      // defined PersonaId in the non-terminal branch.
+      const activeSpeakers =
+        event.persona === undefined || event.persona === "moderator"
+          ? []
+          : withoutActive(state.activeSpeakers, event.persona);
+      const terminal = event.persona === undefined || event.persona === "moderator";
       const errors = withError(state.errors, {
         persona: event.persona,
         message: event.error || "an error occurred",
       });
-      const terminal = event.persona === undefined || event.persona === "moderator";
       return { ...state, phase: terminal ? "error" : state.phase, activeSpeakers, errors };
     }
   }

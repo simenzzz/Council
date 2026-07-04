@@ -1,0 +1,45 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file:
+      - ./backend/.env
+    environment:
+      # Overrides backend/.env's BACKEND_ADDR=:8080 to match this
+      # Dockerfile's EXPOSE 10000 and render.yaml's production convention.
+      # `environment:` takes precedence over `env_file:` in Compose.
+      BACKEND_ADDR: ":10000"
+    ports:
+      - "8080:10000"
+    volumes:
+      # Inert placeholder for Phase 6 (SQLite via modernc.org/sqlite, an
+      # embedded/in-process DB — no separate "db" service, no code reads or
+      # writes this path yet). Anticipated future: DB_PATH=/data/council.db.
+      - council-data:/data
+    # No restart policy: a fail-fast ZAI_API_KEY error should surface in the
+    # foreground logs during local dev/testing, not vanish into a restart loop.
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Build-time only — Vite inlines this into the JS bundle, it is not
+        # runtime-configurable once built. Must be a host-reachable address
+        # (the browser opens the WebSocket, not container-to-container), so
+        # this must match backend's PUBLISHED host port above, never the
+        # internal compose service DNS name (ws://backend:10000/ws would fail).
+        VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8080/ws}
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+      # Start-order only, not readiness: the distroless backend image has no
+      # shell, so no exec HEALTHCHECK is possible. Harmless here — the
+      # frontend serves static files independently, and the WS connection
+      # only opens lazily once a user submits a question in the browser.
+
+volumes:
+  council-data:
+    # Reserved for Phase 6 SQLite persistence.

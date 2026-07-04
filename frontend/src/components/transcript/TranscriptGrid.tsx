@@ -1,8 +1,12 @@
 // TranscriptGrid — the four panelist columns, derived purely from reducer state.
-// Responsive: 1 column on mobile, 2 on small screens, 4 on wide. `dimmed` (driven
-// by whether the verdict spotlight is open) fades/blurs the grid so the spotlight
-// owns the stage; once the panel is dismissed the columns become readable again.
-// The dim transition is gated under prefers-reduced-motion.
+// The column COUNT adapts to the container's real width via an intrinsic auto-fit
+// track: each column gets a clamp()'d min width (viewport-scaled) but never exceeds
+// 100% of the container, and as many as fit are packed in. So the same grid stays
+// readable in the narrow stage drawer and the wide mobile main alike — where a
+// viewport-keyed column ladder forced 4 columns into the 448px drawer, crushing text
+// to one letter per line. `dimmed` (driven by whether the verdict spotlight is open)
+// fades/blurs the grid so the spotlight owns the stage; once the panel is dismissed
+// the columns become readable again. The dim transition is gated under reduced motion.
 
 import { PANELISTS } from "../../personas/registry";
 import type { DebateState } from "../../state/debateReducer";
@@ -25,7 +29,7 @@ export function TranscriptGrid({ state, dimmed }: { state: DebateState; dimmed: 
     <div
       data-dimmed={dimmed}
       className={
-        "grid grid-cols-1 gap-4 transition-[opacity,filter] duration-500 motion-reduce:transition-none sm:grid-cols-2 xl:grid-cols-4 " +
+        "grid gap-4 grid-cols-[repeat(auto-fit,minmax(min(100%,clamp(13rem,40vw,18rem)),1fr))] transition-[opacity,filter] duration-500 motion-reduce:transition-none " +
         (dimmed ? "pointer-events-none opacity-40 blur-[1px]" : "opacity-100")
       }
     >

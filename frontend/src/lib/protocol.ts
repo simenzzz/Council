@@ -17,7 +17,17 @@ import { PERSONA_IDS, type PersonaId } from "../design/tokens";
 
 export const personaIdSchema = z.enum(PERSONA_IDS);
 
-const roundSchema = z.number().int().positive(); // 1-indexed; round 0 never on wire
+// Mirrors backend ClientMessage.Validate (inbound.go): rounds, if present, is
+// an even integer in [2, 8]; declared here (ahead of the rest of the outbound
+// `ask` section below) so the inbound round bound can derive from it.
+export const MAX_ROUNDS = 8;
+
+// 1-indexed; round 0 never on wire. The moderator streams at rounds+1, and
+// rounds is capped at MAX_ROUNDS, so no legitimate frame can carry a round
+// past MAX_ROUNDS + 1 — bound it so a malformed/hostile frame can't smuggle
+// an unbounded number into state.
+const MAX_WIRE_ROUND = MAX_ROUNDS + 1;
+const roundSchema = z.number().int().positive().max(MAX_WIRE_ROUND);
 
 // One schema per `type`, combined into a discriminated union. Fields that the
 // backend may drop via omitempty are given defaults so a sparse frame is still
@@ -98,7 +108,6 @@ export function parseEvent(raw: string): ParseResult {
 
 export const MAX_QUESTION_RUNES = 1000;
 export const MIN_ROUNDS = 2;
-export const MAX_ROUNDS = 8;
 export const DEFAULT_ROUNDS = 2;
 
 export type AskMessage = {

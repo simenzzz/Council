@@ -49,6 +49,18 @@ body {
   }
 }
 
+/* Convene button "power-up" — the council spectrum slides across the button's
+   over-wide gradient on hover. Applied via hover:motion-safe:animate-[council-sweep_…]
+   in QuestionForm; the reduced-motion guard below neutralises it automatically. */
+@keyframes council-sweep {
+  from {
+    background-position: 0% 50%;
+  }
+  to {
+    background-position: 200% 50%;
+  }
+}
+
 /* Accessibility quality floor: honour a user's reduced-motion preference by
    neutralising animation/transition across the app (dim, pulse, spotlight). */
 @media (prefers-reduced-motion: reduce) {

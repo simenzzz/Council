@@ -19,10 +19,10 @@ export function RoundsSelector({
   disabled?: boolean;
 }) {
   return (
-    <label className="flex items-center gap-2 text-sm text-muted">
+    <label className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.24em] text-muted">
       <span>Rounds</span>
       <select
-        className="rounded-md border border-panel-border bg-bg px-2 py-1.5 text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-skeptic disabled:opacity-40"
+        className="rounded-md border border-panel-border bg-bg px-2 py-1.5 font-mono text-sm tracking-normal text-ink transition focus-within:border-skeptic hover:border-skeptic/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-skeptic disabled:opacity-40"
         value={value}
         disabled={disabled}
         onChange={(e) => onChange(Number(e.target.value))}

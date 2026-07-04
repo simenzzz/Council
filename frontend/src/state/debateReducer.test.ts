@@ -70,6 +70,24 @@ describe("debateReducer — errors", () => {
     expect(state.errors.at(-1)?.message).toMatch(/closed before a verdict/);
   });
 
+  it("clears the active roster on a mid-stream disconnect (no ghost streamers)", () => {
+    const state = run([
+      ...fullDebate.slice(0, 8), // all four panelists mid-stream
+      { kind: "status", status: "closed" },
+    ]);
+    expect(state.phase).toBe("error");
+    expect(state.activeSpeakers).toEqual([]);
+  });
+
+  it("clears the active roster on a mid-stream session error", () => {
+    const state = run([
+      ...fullDebate.slice(0, 8),
+      { type: "error", error: "backend exploded" },
+    ]);
+    expect(state.phase).toBe("error");
+    expect(state.activeSpeakers).toEqual([]);
+  });
+
   it("treats a close after a verdict as normal", () => {
     const state = run([...fullDebate, { kind: "status", status: "closed" }]);
     expect(state.phase).toBe("done");

@@ -6,7 +6,7 @@ moderator delivers a verdict. See `../FRONTEND_ROADMAP.md` for the phased plan
 and `../backend` for the Go service that is the source of truth for the wire
 protocol.
 
-## Status — F0 (headless core + design-token foundation)
+## Status — F0–F4 done (headless core → 2D UI → 3D robot stage → polish)
 
 Built and tested:
 
@@ -17,13 +17,16 @@ Built and tested:
 - `src/lib/wsClient.ts` — stateless WebSocket wrapper: connect, send one `ask`,
   validate + emit typed events, expose lifecycle status. Holds no app state.
 - `src/state/debateReducer.ts` — pure, immutable `(state, input) => state`.
+- `src/components/transcript`, `src/components/verdict`, `src/components/controls`,
+  `src/components/status` — the 2D multi-column debate UI: question input,
+  live streaming columns, round dividers, moderator verdict, connection state.
+- `src/three` — the R3F "robot panel" stage (`DebateStage`, `RobotPersona`,
+  `robotVisualState`), driven by the same reducer state as the 2D transcript.
+- `src/personas/registry.ts` — persona display names, colors, 3D params.
 - `src/design/tokens.ts` + `src/styles/theme.css` — the "Holographic council"
-  design tokens (palette incl. per-persona neon accents, type roles), the
-  contract reused by later phases.
-- `src/components/DebugView.tsx` — a throwaway harness that streams raw reducer
-  state, for validating against the live backend.
+  design tokens (palette incl. per-persona neon accents, type roles).
 
-The product UI (2D transcript, then the 3D robot stage) lands in F1–F4.
+F5 (CI + deploy prep) is next — see `../FRONTEND_ROADMAP.md`.
 
 ## Develop
 

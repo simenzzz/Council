@@ -10,7 +10,7 @@ type Config struct {
 	Addr           string
 	AllowedOrigins []string
 	ZaiAPIKey      string // required; fail-fast; NEVER logged
-	LlmModel       string // default "glm-4.6"
+	LlmModel       string // default "glm-4.7"
 }
 
 func Load() (Config, error) {

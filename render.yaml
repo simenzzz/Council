@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: council-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: BACKEND_ADDR
+        value: ":10000"
+      - key: ZAI_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: glm-4.7
+      # Required: comma-separated allowlist (e.g. https://council.vercel.app).
+      # Left blank, the backend silently falls back to localhost:5173, which
+      # means the deployed frontend's WS/CORS requests will be rejected.
+      - key: FRONTEND_ORIGINS
+        sync: false

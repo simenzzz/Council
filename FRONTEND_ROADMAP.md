@@ -62,11 +62,14 @@ WebSocket.
 - **Boundary validation:** `zod` schemas validate every inbound event before it
   reaches state (validate-at-boundary; never trust the socket).
 - **Testing:** Vitest + React Testing Library (unit/component);
-  `@react-three/test-renderer` (3D scene-graph smoke tests, no GPU); Playwright +
-  a mock-WS harness (E2E). Testing is **front-loaded** — F0–F1 are a heavily
-  tested headless + 2D core; the 3D phases isolate their reactive logic into a
-  few **pure mapping functions** that are unit-tested, leaving only animation for
-  visual QA.
+  `@react-three/test-renderer` (3D scene-graph smoke tests, no GPU). Testing is
+  **front-loaded** — F0–F1 are a heavily tested headless + 2D core; the 3D
+  phases isolate their reactive logic into a few **pure mapping functions**
+  that are unit-tested, leaving only animation for visual QA. Browser-level E2E
+  (Playwright) was scoped out of F5 — this is a solo learning project whose
+  primary purpose is Go (see root `CLAUDE.md`), and the existing unit/component
+  suite already covers the reducer, wsClient, and components. Revisit if the
+  project grows contributors or a CI regression slips through unit coverage.
 
 ## Architecture sketch
 
@@ -160,14 +163,24 @@ never owns debate state, it only *renders* a derived view of it.
 - **Tests:** logic tests stay green; visual + perf QA pass.
 - **Done when:** each robot reads as its persona; smooth; graceful 2D fallback.
 
-### F5 — E2E & deploy prep
-- Playwright E2E against a **mock-WS harness** replaying canned event logs
-  (deterministic, no live LLM) — mirrors the backend's fake-provider testing
-  ethos. Assert: ask → columns fill → robots animate (smoke) → verdict.
-- `VITE_WS_URL` for the prod WS endpoint; build; deploy to Vercel; README +
-  demo GIF.
-- **Done when:** E2E green in CI; deployed; prod points at the deployed Go
-  backend.
+### F5 — CI & deploy prep
+- GitHub Actions CI for both halves of the repo: `frontend-ci.yml` (lint +
+  `vitest run` + build) and `backend-ci.yml` (`go build`, `go vet`,
+  `go test -race`), each scoped to their directory via path filters.
+- `VITE_WS_URL` for the prod WS endpoint (already wired, see `.env.example` /
+  `src/lib/wsClient.ts`); production build (Vite → Vercel is zero-config for a
+  routerless SPA, no `vercel.json` needed).
+- Backend deploy scaffolding: `backend/Dockerfile` (multi-stage, distroless)
+  and root `render.yaml` (Render web service, secrets left `sync: false`).
+  Pairs with backend Phase 5 ("Ship & harden") in `PROJECT_BRIEF.md`, which
+  adds the rate limiting / reconnect handling that make a live deploy robust.
+- Playwright E2E was **explicitly scoped out** — pure frontend test
+  infrastructure, no Go-learning value for a solo project with existing unit
+  coverage. See the Tech stack → Testing note above if this changes.
+- **Done when:** both CI workflows are green on a PR; `docker build` for the
+  backend succeeds locally; deploy config is ready to run once hosting
+  accounts/secrets are connected (actually pushing a live deploy is a
+  separate, explicit step — not automated here).
 
 ---
 

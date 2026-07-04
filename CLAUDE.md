@@ -104,6 +104,13 @@ client disconnect or stop cancels every persona goroutine for that session.
 **Frontend (`frontend/`, npm):**
 - `npm install` · `npm run dev` · `npm run build` · `npm test`
 
+**Docker Compose (full-stack local testing):**
+- Copy `backend/.env.example` → `backend/.env` and fill in `ZAI_API_KEY`.
+- `docker compose up --build` — backend on `ws://localhost:8080/ws`
+  (`/healthz` at the same host:port), frontend on `http://localhost:5173`.
+- The `council-data` volume is an inert placeholder reserved for Phase 6
+  (SQLite persistence); nothing reads or writes it yet.
+
 **Testing concurrent code:** test the orchestrator deterministically with a
 **fake streaming provider** (an in-memory implementation of the provider
 interface) plus `net/http/httptest`; prefer table-driven tests. This is an

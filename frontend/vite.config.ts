@@ -12,7 +12,14 @@ export default defineConfig({
     setupFiles: ["./src/test/setup.ts"],
     coverage: {
       provider: "v8",
-      include: ["src/lib/**", "src/state/**", "src/components/**", "src/personas/**", "src/hooks/**"],
+      include: [
+        "src/lib/**",
+        "src/state/**",
+        "src/components/**",
+        "src/personas/**",
+        "src/hooks/**",
+        "src/three/**",
+      ],
     },
   },
 });

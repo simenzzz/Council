@@ -45,7 +45,6 @@ State:
 1. Main challenge
 2. Weak assumptions
 3. Risks or failure modes
-4. Confidence (0–100)
 `,
 		},
 		{
@@ -75,7 +74,6 @@ State:
 1. Main opportunity
 2. Why it could succeed
 3. Conditions required
-4. Confidence (0–100)
 `,
 		},
 		{
@@ -105,7 +103,6 @@ State:
 1. Technical assessment
 2. Supporting evidence or reasoning
 3. Tradeoffs
-4. Confidence (0–100)
 `,
 		},
 		{
@@ -135,7 +132,6 @@ State:
 1. Alternative framing
 2. Why consensus could be wrong
 3. Overlooked effects
-4. Confidence (0–100)
 `,
 		},
 	}
@@ -158,7 +154,6 @@ Rules:
 - Identify agreement and disagreement.
 - Resolve conflicts where possible.
 - Explicitly identify uncertainty.
-- Ignore confidence scores if unsupported by reasoning.
 
 Process:
 1. Summarize each panelist's strongest point.
@@ -185,9 +180,6 @@ Output format:
 ## Final Verdict
 
 ## Remaining Uncertainty
-
-## Overall Confidence
-(0–100)
 `,
 	}
 }
