@@ -16,7 +16,7 @@ import { useDebate } from "./state/useDebate";
 const STAGE_MIN_WIDTH = "(min-width: 768px)";
 
 export default function App() {
-  const { state, ask, stop } = useDebate();
+  const { state, ask, stop, rate, setRate, goToLive, isAtLive } = useDebate();
   const [rounds, setRounds] = useState<number>(DEFAULT_ROUNDS);
   const [question, setQuestion] = useState<string>("");
   const questionRef = useRef<HTMLTextAreaElement>(null);
@@ -56,6 +56,10 @@ export default function App() {
     soundEnabled,
     onToggleSound: toggleSound,
     questionRef,
+    rate,
+    onSetRate: setRate,
+    isAtLive,
+    onGoToLive: goToLive,
   };
 
   return stageFirst ? (

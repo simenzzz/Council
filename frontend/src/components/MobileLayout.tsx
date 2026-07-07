@@ -9,6 +9,7 @@
 import type { RefObject } from "react";
 import { Header } from "./Header";
 import { QuestionForm } from "./controls/QuestionForm";
+import { PlaybackControls } from "./controls/PlaybackControls";
 import { ConnectionStatus } from "./status/ConnectionStatus";
 import { ErrorBanner } from "./status/ErrorBanner";
 import { TranscriptGrid } from "./transcript/TranscriptGrid";
@@ -24,6 +25,10 @@ type MobileLayoutProps = {
   soundEnabled: boolean;
   onToggleSound: () => void;
   questionRef: RefObject<HTMLTextAreaElement | null>;
+  rate: number;
+  onSetRate: (multiplier: number) => void;
+  isAtLive: boolean;
+  onGoToLive: () => void;
 };
 
 export function MobileLayout({
@@ -34,6 +39,10 @@ export function MobileLayout({
   soundEnabled,
   onToggleSound,
   questionRef,
+  rate,
+  onSetRate,
+  isAtLive,
+  onGoToLive,
 }: MobileLayoutProps) {
   const { open: verdictOpen, dismiss: dismissVerdict } = useVerdictSpotlight(state.phase);
 
@@ -61,6 +70,14 @@ export function MobileLayout({
         textareaRef={questionRef}
         soundEnabled={soundEnabled}
         onToggleSound={onToggleSound}
+      />
+
+      <PlaybackControls
+        phase={state.phase}
+        rate={rate}
+        onSetRate={onSetRate}
+        isAtLive={isAtLive}
+        onGoToLive={onGoToLive}
       />
 
       <ConnectionStatus phase={state.phase} currentRound={state.currentRound} rounds={rounds} />

@@ -4,6 +4,7 @@
 // user would be stranded on a full-screen stage with no affordances.
 
 import type { DebatePhase } from "../../state/debateReducer";
+import { PlaybackControls } from "../controls/PlaybackControls";
 import { SoundToggle } from "../controls/SoundToggle";
 
 const LIVE_PHASES: ReadonlySet<DebatePhase> = new Set(["connecting", "debating", "moderating"]);
@@ -18,6 +19,10 @@ type StageControlsProps = {
   onToggleDrawer: () => void;
   soundEnabled: boolean;
   onToggleSound: () => void;
+  rate: number;
+  onSetRate: (multiplier: number) => void;
+  isAtLive: boolean;
+  onGoToLive: () => void;
 };
 
 const BTN =
@@ -32,11 +37,16 @@ export function StageControls({
   onToggleDrawer,
   soundEnabled,
   onToggleSound,
+  rate,
+  onSetRate,
+  isAtLive,
+  onGoToLive,
 }: StageControlsProps) {
   const live = LIVE_PHASES.has(phase);
 
   return (
     <div className="flex items-center gap-2">
+      <PlaybackControls phase={phase} rate={rate} onSetRate={onSetRate} isAtLive={isAtLive} onGoToLive={onGoToLive} />
       {live && (
         <button type="button" onClick={onStop} className={BTN}>
           Stop

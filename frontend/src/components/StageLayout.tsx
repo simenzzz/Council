@@ -36,6 +36,10 @@ type StageLayoutProps = {
   soundEnabled: boolean;
   onToggleSound: () => void;
   questionRef: RefObject<HTMLTextAreaElement | null>;
+  rate: number;
+  onSetRate: (multiplier: number) => void;
+  isAtLive: boolean;
+  onGoToLive: () => void;
 };
 
 export function StageLayout({
@@ -47,6 +51,10 @@ export function StageLayout({
   soundEnabled,
   onToggleSound,
   questionRef,
+  rate,
+  onSetRate,
+  isAtLive,
+  onGoToLive,
 }: StageLayoutProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   // The hero form is open on the idle stage and after "ask another"; convening a
@@ -130,6 +138,10 @@ export function StageLayout({
           onToggleDrawer={() => setDrawerOpen((v) => !v)}
           soundEnabled={soundEnabled}
           onToggleSound={onToggleSound}
+          rate={rate}
+          onSetRate={onSetRate}
+          isAtLive={isAtLive}
+          onGoToLive={onGoToLive}
         />
       </div>
 

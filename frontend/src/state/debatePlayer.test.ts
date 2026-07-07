@@ -7,7 +7,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import type { DebateEvent, PersonaId } from "../lib/protocol";
 import { debateReducer, initialState, type DebateInput, type DebateState } from "./debateReducer";
-import { DebatePlayer } from "./debatePlayer";
+import { DebatePlayer, TICK_MS } from "./debatePlayer";
 
 const PANELISTS: PersonaId[] = ["skeptic", "optimist", "expert", "contrarian"];
 
@@ -212,5 +212,151 @@ describe("DebatePlayer", () => {
     vi.runAllTimers();
 
     expect(inputs.length).toBe(countAtReset); // nothing dispatched after reset
+  });
+});
+
+describe("DebatePlayer — playback speed", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function tokenCount(inputs: DebateInput[]): number {
+    return inputs.filter((i): i is Extract<DebateEvent, { type: "token" }> => !("kind" in i) && i.type === "token")
+      .length;
+  }
+
+  it("setRate() clamps to [MIN_RATE, MAX_RATE]", () => {
+    const player = new DebatePlayer({ dispatch: () => {}, reducedMotion: false });
+    player.setRate(100);
+    expect(player.getRate()).toBe(4);
+    player.setRate(0.001);
+    expect(player.getRate()).toBe(0.5);
+  });
+
+  it("a higher rate reveals more words in the same elapsed time", () => {
+    const slow: DebateInput[] = [];
+    const fast: DebateInput[] = [];
+    const slowPlayer = new DebatePlayer({ dispatch: (i) => slow.push(i), reducedMotion: false });
+    const fastPlayer = new DebatePlayer({ dispatch: (i) => fast.push(i), reducedMotion: false });
+    fastPlayer.setRate(2);
+
+    const delta = "one two three four five six seven eight ";
+    for (const player of [slowPlayer, fastPlayer]) {
+      player.feedStatus("connecting");
+      player.feed({ type: "token", persona: "skeptic", round: 1, delta });
+      player.feed({ type: "persona_done", persona: "skeptic", round: 1 });
+      player.feed({ type: "round_complete", round: 1 });
+    }
+
+    vi.advanceTimersByTime(TICK_MS * 4);
+
+    expect(tokenCount(fast)).toBeGreaterThan(tokenCount(slow));
+  });
+
+  it("a rate change mid-flight affects only the next scheduled step, not the in-flight one", () => {
+    const inputs: DebateInput[] = [];
+    const player = new DebatePlayer({ dispatch: (i) => inputs.push(i), reducedMotion: false });
+    player.feedStatus("connecting");
+    player.feed({ type: "token", persona: "skeptic", round: 1, delta: "one two three four " });
+    player.feed({ type: "persona_done", persona: "skeptic", round: 1 });
+    player.feed({ type: "round_complete", round: 1 });
+
+    // The round_complete feed already synchronously dispatched "one " and armed a
+    // TICK_MS timer for "two ". Bump the rate (clamped to MAX_RATE) before that
+    // timer fires.
+    expect(tokenCount(inputs)).toBe(1);
+    player.setRate(10);
+    const fastRate = player.getRate(); // clamped to MAX_RATE, not literally 10
+
+    // The in-flight timer keeps its original TICK_MS delay...
+    vi.advanceTimersByTime(TICK_MS - 1);
+    expect(tokenCount(inputs)).toBe(1);
+    vi.advanceTimersByTime(1);
+    expect(tokenCount(inputs)).toBe(2);
+
+    // ...but the tick scheduled from here on picks up the new, much faster rate.
+    vi.advanceTimersByTime(TICK_MS / fastRate);
+    expect(tokenCount(inputs)).toBe(3);
+  });
+});
+
+describe("DebatePlayer — isAtLive() / skipToLive()", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("isAtLive() is true on a freshly constructed player with nothing fed", () => {
+    const player = new DebatePlayer({ dispatch: () => {}, reducedMotion: false });
+    expect(player.isAtLive()).toBe(true);
+  });
+
+  it("isAtLive() is false once a full turn is buffered and playback is mid-reveal", () => {
+    const player = new DebatePlayer({ dispatch: () => {}, reducedMotion: false });
+    player.feedStatus("connecting");
+    for (const p of PANELISTS) player.feed({ type: "token", persona: p, round: 1, delta: `${p} r1 more words ` });
+    for (const p of PANELISTS) player.feed({ type: "persona_done", persona: p, round: 1 });
+    player.feed({ type: "round_complete", round: 1 });
+
+    expect(player.isAtLive()).toBe(false);
+  });
+
+  it("skipToLive() drains everything currently recorded synchronously, with no lingering timer", () => {
+    const inputs: DebateInput[] = [];
+    const player = new DebatePlayer({ dispatch: (i) => inputs.push(i), reducedMotion: false });
+    player.feedStatus("connecting");
+    for (const p of PANELISTS) player.feed({ type: "token", persona: p, round: 1, delta: `${p} r1 more words here ` });
+    for (const p of PANELISTS) player.feed({ type: "persona_done", persona: p, round: 1 });
+    player.feed({ type: "round_complete", round: 1 });
+
+    player.skipToLive();
+
+    // Drained through everything round 1 has to offer, then correctly PARKs
+    // waiting for round 2 — "at live" means caught up, not "nothing more will
+    // ever arrive".
+    expect(player.isAtLive()).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+
+    // First three round-1 dones flushed; the last (contrarian) is deferred until
+    // the next turn opens, same as live pacing (holds the spotlight through the
+    // beat) — see the "parks" test above for the identical live-paced behavior.
+    expect(personaDoneOrder(inputs)).toEqual(["skeptic:1", "optimist:1", "expert:1"]);
+    const afterDrain = foldStates(inputs).at(-1)!;
+    expect(afterDrain.activeSpeakers).toEqual(["contrarian"]);
+    expect(afterDrain.transcript.contrarian?.[1]).toBe("contrarian r1 more words here ");
+  });
+
+  it("resumes normal paced (word-by-word) playback after skipToLive(), not another instant drain", () => {
+    const inputs: DebateInput[] = [];
+    const player = new DebatePlayer({ dispatch: (i) => inputs.push(i), reducedMotion: false });
+    player.feedStatus("connecting");
+    for (const p of PANELISTS) player.feed({ type: "token", persona: p, round: 1, delta: `${p} r1 ` });
+    for (const p of PANELISTS) player.feed({ type: "persona_done", persona: p, round: 1 });
+    player.feed({ type: "round_complete", round: 1 });
+    player.skipToLive();
+    const countAfterDrain = inputs.length;
+
+    for (const p of PANELISTS) {
+      player.feed({ type: "token", persona: p, round: 2, delta: `${p} round two more words here ` });
+    }
+    for (const p of PANELISTS) player.feed({ type: "persona_done", persona: p, round: 2 });
+    player.feed({ type: "round_complete", round: 2 });
+
+    // Only the first word of round 2's first speaker should have landed
+    // synchronously (the same "one step per feed()" behavior as live playback) —
+    // not the whole round in one shot, which would indicate a stuck drain mode.
+    const skepticR2Tokens = inputs
+      .slice(countAfterDrain)
+      .filter(
+        (i): i is Extract<DebateEvent, { type: "token" }> =>
+          !("kind" in i) && i.type === "token" && i.persona === "skeptic" && i.round === 2,
+      );
+    expect(skepticR2Tokens).toHaveLength(1);
+    expect(skepticR2Tokens[0].delta).not.toBe("skeptic round two more words here ");
+
+    player.feed({ type: "token", persona: "moderator", round: 3, delta: "verdict text" });
+    player.feed({ type: "verdict", verdict: "Resumed and decided." });
+    vi.runAllTimers();
+
+    const final = foldStates(inputs).at(-1)!;
+    expect(final.phase).toBe("done");
+    expect(final.verdict).toBe("Resumed and decided.");
   });
 });

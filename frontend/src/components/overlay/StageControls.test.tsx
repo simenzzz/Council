@@ -13,6 +13,10 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof StageCont
     onToggleDrawer: () => {},
     soundEnabled: false,
     onToggleSound: () => {},
+    rate: 1,
+    onSetRate: () => {},
+    isAtLive: true,
+    onGoToLive: () => {},
     ...overrides,
   };
   return render(<StageControls {...props} />);
@@ -43,5 +47,12 @@ describe("StageControls", () => {
     expect(btn).toHaveAttribute("aria-pressed", "true");
     await userEvent.click(btn);
     expect(onToggleDrawer).toHaveBeenCalledOnce();
+  });
+
+  it("threads playback controls through to the embedded PlaybackControls", async () => {
+    const onGoToLive = vi.fn();
+    renderControls({ phase: "debating", isAtLive: false, onGoToLive });
+    await userEvent.click(screen.getByRole("button", { name: "Go to live" }));
+    expect(onGoToLive).toHaveBeenCalledOnce();
   });
 });

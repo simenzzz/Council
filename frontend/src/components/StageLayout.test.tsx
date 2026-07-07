@@ -21,6 +21,10 @@ function renderStage(overrides: Partial<React.ComponentProps<typeof StageLayout>
     soundEnabled: false,
     onToggleSound: () => {},
     questionRef: createRef<HTMLTextAreaElement>(),
+    rate: 1,
+    onSetRate: () => {},
+    isAtLive: true,
+    onGoToLive: () => {},
     ...overrides,
   };
   return render(<StageLayout {...props} />);

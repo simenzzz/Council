@@ -20,11 +20,17 @@ import type { DebateEvent, ErrorEvent, PersonaId } from "../lib/protocol";
 import type { WsStatus } from "../lib/wsClient";
 import type { DebateInput } from "./debateReducer";
 import { MODERATOR_ID, PANELISTS } from "../personas/registry";
+import { nextChunkEnd } from "../lib/textReveal";
 
 // Pacing (tunable): reveal one whitespace-delimited word per TICK_MS (~3 words/s),
 // with a short beat between speakers so the camera can settle on the new one.
-const TICK_MS = 300;
+// Exported so tests can reason about the pacing directly.
+export const TICK_MS = 300;
 const TURN_GAP_MS = 550;
+
+// Bounds for the user-adjustable playback-speed multiplier.
+export const MIN_RATE = 0.5;
+export const MAX_RATE = 4;
 
 // Cap buffered text per (persona, round) exactly as the reducer caps display
 // (MAX_CELL_CHARS), so a runaway or hostile stream can't grow the buffer without
@@ -66,22 +72,17 @@ function prefersReducedMotion(): boolean {
   );
 }
 
-function isSpace(ch: string): boolean {
-  return ch === " " || ch === "\n" || ch === "\t" || ch === "\r";
-}
-
-/** End index of the next word (plus its trailing whitespace) from `pos`. Never stalls. */
-function nextChunkEnd(text: string, pos: number): number {
-  let i = pos;
-  while (i < text.length && !isSpace(text[i])) i++; // the word
-  while (i < text.length && isSpace(text[i])) i++; // its trailing spaces
-  return i > pos ? i : Math.min(text.length, pos + 1);
-}
-
 export class DebatePlayer {
   private readonly dispatch: Dispatch;
   private readonly reducedMotion: boolean;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  // Speed multiplier applied to TICK_MS/TURN_GAP_MS; a user preference, not
+  // session state, so reset() intentionally leaves it untouched.
+  private rate = 1;
+  // True only for the duration of a synchronous skipToLive() drain — makes
+  // revealStep() take the same "reveal everything remaining in one dispatch"
+  // path already used for reducedMotion, without duplicating that logic.
+  private draining = false;
 
   // --- Recording (populated by feed*, never dispatched as it arrives) ---------
   private text = new Map<PersonaId, Map<number, string>>();
@@ -105,6 +106,85 @@ export class DebatePlayer {
   constructor(opts: DebatePlayerOptions) {
     this.dispatch = opts.dispatch;
     this.reducedMotion = opts.reducedMotion ?? prefersReducedMotion();
+  }
+
+  // --- Speed control ------------------------------------------------------
+
+  /** Set the playback-speed multiplier (clamped to [MIN_RATE, MAX_RATE]). Takes
+   *  effect on the next delay the scheduler computes — a `setTimeout` already in
+   *  flight keeps counting down at the rate it was armed with. */
+  setRate(multiplier: number): void {
+    this.rate = Math.min(MAX_RATE, Math.max(MIN_RATE, multiplier));
+  }
+
+  getRate(): number {
+    return this.rate;
+  }
+
+  private tickMs(): number {
+    return TICK_MS / this.rate;
+  }
+
+  private turnGapMs(): number {
+    return TURN_GAP_MS / this.rate;
+  }
+
+  // --- Live/backlog status --------------------------------------------------
+
+  /** True if the given cursor's turn already has every byte it needs buffered
+   *  (ignores whether the stream has since terminated — see terminalKnown()). */
+  private hasBufferedTurn(c: Cursor): boolean {
+    if (c.kind === "panelist") return this.roundComplete.has(c.round);
+    if (c.kind === "moderator") return this.verdict !== null;
+    return true; // "done" — trivially satisfied, never actually consulted for PARK.
+  }
+
+  /**
+   * True if calling step() right now would do real work instead of PARKing.
+   * Deliberately does NOT treat a nonzero pendingDone/pendingRoundComplete/
+   * pendingErrors as "ready work" on its own — those are only flushed once
+   * prepareNextTurn() actually advances to a new turn (see revealStep()'s
+   * "defer until the next turn opens" comment), which is exactly the
+   * hasBufferedTurn()/terminalKnown() condition below. A finished turn whose
+   * done is deferred while the *next* turn is still unbuffered is genuinely
+   * parked — mirrors prepareNextTurn()'s own decision tree exactly.
+   */
+  private hasReadyWork(): boolean {
+    if (this.active !== null) return true;
+    if (this.cursor.kind === "done") return false;
+    if (this.hasBufferedTurn(this.cursor)) return true;
+    return this.terminalKnown(); // stream ended: prepareNextTurn would finalize, not PARK.
+  }
+
+  /** True when playback has caught up to everything currently recorded — i.e.
+   *  there's nothing left to skip via skipToLive(). Cheap and side-effect-free;
+   *  safe to call on every render. */
+  isAtLive(): boolean {
+    return !this.hasReadyWork();
+  }
+
+  /**
+   * Instantly drain everything currently recorded into the reducer, bypassing
+   * the paced setTimeout schedule. Reuses step() unchanged — no new
+   * turn-advancement logic — but each turn's remaining text is dispatched in
+   * one chunk instead of word-by-word (the same fast-reveal path already used
+   * for reducedMotion). Runs synchronously to completion: JS's single-threaded
+   * execution means no feed() call can interleave mid-drain, so there is no
+   * race between "draining" and "new data arriving". Normal paced playback
+   * resumes automatically for anything fed afterward.
+   */
+  skipToLive(): void {
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.draining = true;
+    try {
+      let delay = this.step();
+      while (delay !== PARK && delay !== DONE) delay = this.step();
+    } finally {
+      this.draining = false;
+    }
   }
 
   // --- Inbound: record, then try to make progress ----------------------------
@@ -185,6 +265,8 @@ export class DebatePlayer {
     this.pendingDone = null;
     this.pendingRoundComplete = null;
     this.pendingErrors = [];
+    this.draining = false;
+    // `rate` is a user preference, not session state — intentionally survives reset().
   }
 
   // --- Scheduler --------------------------------------------------------------
@@ -222,7 +304,7 @@ export class DebatePlayer {
     if (c.kind === "done") return DONE;
 
     if (c.kind === "panelist") {
-      if (!this.roundComplete.has(c.round)) {
+      if (!this.hasBufferedTurn(c)) {
         // This round isn't buffered yet. If the stream has terminated, no further
         // panelist rounds are coming — hand off to the moderator/terminal.
         if (this.terminalKnown()) {
@@ -244,7 +326,10 @@ export class DebatePlayer {
       return null;
     }
 
-    // Moderator turn: playable once the verdict is recorded.
+    // Moderator turn: playable once the verdict is recorded. Kept as an inline
+    // null check (rather than hasBufferedTurn(c), used elsewhere) so TS can
+    // narrow `this.verdict` to non-null below — a private-method call can't
+    // carry that narrowing across the call boundary.
     if (this.verdict === null) {
       if (this.sessionError !== null || this.closed) {
         this.flushPending();
@@ -291,13 +376,13 @@ export class DebatePlayer {
           ? { kind: "panelist", round: a.round, index: a.index + 1 }
           : { kind: "panelist", round: a.round + 1, index: 0 };
       this.active = null;
-      return TURN_GAP_MS;
+      return this.turnGapMs();
     }
-    const end = this.reducedMotion ? a.text.length : nextChunkEnd(a.text, a.pos);
+    const end = this.reducedMotion || this.draining ? a.text.length : nextChunkEnd(a.text, a.pos);
     const delta = a.text.slice(a.pos, end);
     a.pos = end;
     this.dispatch({ type: "token", persona: a.persona, round: a.round, delta });
-    return TICK_MS;
+    return this.tickMs();
   }
 
   private terminalKnown(): boolean {
