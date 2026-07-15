@@ -41,31 +41,49 @@ func New(rps float64, burst int, ttl time.Duration) *Limiter {
 // Allow reports whether a request from ip may proceed, creating the per-IP
 // bucket on first sight and refreshing its lastSeen timestamp.
 func (l *Limiter) Allow(ip string) bool {
-	// TODO(you):
-	//  - l.mu.Lock() / defer Unlock()
-	//  - e, ok := l.ips[ip]; if !ok create &ipEntry{lim: rate.NewLimiter(l.rps,
-	//    l.burst)} and store it
-	//  - e.lastSeen = time.Now()
-	//  - return e.lim.Allow()
-	panic("TODO(you): implement Allow")
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	now := time.Now()
+	e, ok := l.ips[ip]
+	if !ok {
+		e = &ipEntry{
+			lim:      rate.NewLimiter(l.rps, l.burst),
+			lastSeen: now,
+		}
+		l.ips[ip] = e
+	} else {
+		e.lastSeen = now
+	}
+	return e.lim.AllowN(now, 1)
 }
 
 // StartJanitor runs a background goroutine that evicts IP entries idle longer
 // than ttl, so the map cannot grow unbounded. It stops when ctx is cancelled —
 // root it at the server base context so it dies on shutdown.
 func (l *Limiter) StartJanitor(ctx context.Context, interval time.Duration) {
-	// TODO(you):
-	//  - go func() { ticker := time.NewTicker(interval); defer ticker.Stop()
-	//      for { select {
-	//        case <-ctx.Done(): return
-	//        case now := <-ticker.C: l.sweep(now) } } }()
-	panic("TODO(you): implement StartJanitor")
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case now := <-ticker.C:
+				l.sweep(now)
+			}
+		}
+	}()
 }
 
 // sweep removes entries not seen within ttl. Split out so a test can drive one
 // eviction pass deterministically without waiting on the ticker.
 func (l *Limiter) sweep(now time.Time) {
-	// TODO(you): lock; for ip, e := range l.ips { if now.Sub(e.lastSeen) > l.ttl
-	//            { delete(l.ips, ip) } }
-	panic("TODO(you): implement sweep")
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	for ip, e := range l.ips {
+		if now.Sub(e.lastSeen) >= l.ttl {
+			delete(l.ips, ip)
+		}
+	}
 }

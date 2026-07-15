@@ -14,6 +14,8 @@ import (
 	"github.com/simenzzz/council/backend/internal/orchestrator"
 	"github.com/simenzzz/council/backend/internal/protocol"
 	"github.com/simenzzz/council/backend/internal/provider"
+	"github.com/simenzzz/council/backend/internal/ratelimit"
+	"github.com/simenzzz/council/backend/internal/store"
 	"github.com/simenzzz/council/backend/internal/ws"
 )
 
@@ -46,6 +48,22 @@ func main() {
 		syscall.SIGTERM)
 	defer stop()
 
+	// Phase 5 hardening: per-IP token bucket (with a janitor rooted at ctx so it
+	// dies on shutdown), the durable per-IP daily quota (SQLite), and a counting
+	// semaphore bounding concurrent debates. All three guards run inside
+	// ratelimit.Middleware, ahead of the WebSocket upgrade.
+	lim := ratelimit.New(cfg.RateLimitRPS, cfg.RateLimitBurst, cfg.RateLimitTTL)
+	lim.StartJanitor(ctx, cfg.RateLimitSweepEvery)
+
+	quotaStore, err := store.Open(cfg.DBPath)
+	if err != nil {
+		logger.Error("quota store open failed", "err", err)
+		os.Exit(1)
+	}
+	defer quotaStore.Close()
+
+	sem := make(chan struct{}, cfg.MaxConcurrentSessions)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz",
 		func(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +71,8 @@ func main() {
 			_, _ = w.Write([]byte("ok"))
 		})
 	mux.Handle("GET /ws/echo", ws.HandleEcho(logger, cfg.AllowedOrigins))
-	mux.Handle("GET /ws", ws.HandleSession(logger, cfg.AllowedOrigins, orch, panel))
+	mux.Handle("GET /ws", ratelimit.Middleware(lim, sem, quotaStore, cfg.DailyQuota, cfg.TrustProxy,
+		ws.HandleSession(logger, cfg.AllowedOrigins, orch, panel)))
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: mux, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 120 * time.Second}
 
