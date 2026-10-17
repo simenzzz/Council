@@ -24,12 +24,21 @@ type wireMessage struct {
 }
 
 type wireRequest struct {
-	Model    string        `json:"model"`
-	Messages []wireMessage `json:"messages"`
-	Stream   bool          `json:"stream"`
+	Model         string        `json:"model"`
+	Messages      []wireMessage `json:"messages"`
+	Stream        bool          `json:"stream"`
+	Temperature   *float64      `json:"temperature,omitempty"`
+	StreamOptions struct {
+		IncludeUsage bool `json:"include_usage"`
+	} `json:"stream_options"`
 	Thinking struct {
 		Type string `json:"type"`
 	} `json:"thinking"`
+}
+
+type wireUsage struct {
+	PromptTokens     int64 `json:"prompt_tokens"`
+	CompletionTokens int64 `json:"completion_tokens"`
 }
 
 type wireChunk struct {
@@ -38,6 +47,8 @@ type wireChunk struct {
 			Content string `json:"content"`
 		} `json:"delta"`
 	} `json:"choices"`
+
+	Usage *wireUsage `json:"usage"`
 }
 
 var _ Provider = (*ZaiProvider)(nil)
@@ -69,8 +80,11 @@ func (z *ZaiProvider) Stream(ctx context.Context, req Request) (<-chan StreamEve
 		Model:    model,
 		Messages: messages,
 		Stream:   true,
+		// A nil temperature sends no key, so the API default applies.
+		Temperature: req.Temperature,
 	}
 	body.Thinking.Type = "disabled"
+	body.StreamOptions.IncludeUsage = true
 
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
@@ -141,6 +155,19 @@ func (z *ZaiProvider) streamResponse(ctx context.Context, httpReq *http.Request,
 		if err != nil {
 			continue
 		}
+
+		if chunk.Usage != nil {
+			select {
+			case <-ctx.Done():
+				return
+			case out <- StreamEvent{
+				Usage: TokenUsage{InputTokens: chunk.Usage.PromptTokens,
+					OutputTokens: chunk.Usage.CompletionTokens},
+				Err: nil,
+			}:
+			}
+		}
+
 		if len(chunk.Choices) == 0 {
 			continue
 		}

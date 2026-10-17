@@ -102,24 +102,46 @@ func (o *Orchestrator) stream(
 	}
 
 	var b strings.Builder
+	var usage provider.TokenUsage
 	for ev := range stream {
 		if ev.Err != nil {
 			o.logger.Error("stream failed", "persona", persona.ID, "err", ev.Err)
+			o.logTurnCost("turn failed", persona.ID, round, req.Model, usage)
 			emit(ctx, out, protocol.Error(persona.ID, "stream failed"))
 			return b.String()
 		}
+		if ev.Usage != (provider.TokenUsage{}) {
+			usage = ev.Usage
+		}
+		if ev.Delta == "" {
+			continue
+		}
 		b.WriteString(ev.Delta)
 		if !emit(ctx, out, protocol.Token(persona.ID, round, ev.Delta)) {
+			o.logTurnCost("turn cancelled", persona.ID, round, req.Model, usage)
 			return b.String()
 		}
 	}
-
+	o.logTurnCost("turn complete", persona.ID, round, req.Model, usage)
 	if isModerator {
 		emit(ctx, out, protocol.Verdict(b.String()))
 	} else {
 		emit(ctx, out, protocol.PersonaDone(persona.ID, round))
 	}
 	return b.String()
+}
+
+// logTurnCost writes one line with the tokens and the cost of one turn. The
+// outcome names how the turn ended: complete, failed, or cancelled.
+func (o *Orchestrator) logTurnCost(outcome string, personaID string, round int, model string, usage provider.TokenUsage) {
+	o.logger.Info(outcome,
+		"persona", personaID,
+		"round", round,
+		"model", model,
+		"input_tokens", usage.InputTokens,
+		"output_tokens", usage.OutputTokens,
+		"cost_usd", turnCost(model, usage, o.logger),
+	)
 }
 
 func (o *Orchestrator) runModerator(ctx context.Context, question string, transcript Transcript, round int, out chan<- protocol.Event) {

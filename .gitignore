@@ -8,9 +8,14 @@
 /backend/cmd/server/server
 *.test
 *.out
+/backend/council.db
 
 # Local Claude settings (keep shared commands tracked)
 .claude/settings.local.json
+
+# Local paid-run experiment tool (Module 1 curriculum work; not the product)
+/backend/cmd/tempexperiment/
+/backend/cmd/debateprobe/
 
 # Local Docker Compose overrides (may hold local secrets/port remaps)
 docker-compose.override.yml
